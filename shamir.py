@@ -1,10 +1,9 @@
 import os
-import random
+import secrets
 from typing import List, Tuple
 
-# Primo grande para o campo finito (2^127 - 1, Mersenne)
+# Primo grande para o campo finito
 PRIME = 2**521 - 1  # primo de Mersenne enorme
-
 
 # ===========================
 #   FUNÇÕES DO SHAMIR
@@ -20,24 +19,35 @@ def eval_poly(coeffs: List[int], x: int, p: int) -> int:
     return result
 
 
-def make_shares(secret: int, n: int, k: int, p: int = PRIME) -> List[Tuple[int, int]]:
-    """Gera n shares com threshold k."""
+def make_shares(secret: int, n: int, k: int, p: int = PRIME) -> List[Tuple[int, int, int]]:
+    """
+    Gera n shares com threshold k.
+    Agora retorna (x, y, r), onde:
+      - y = f(x) (Shamir)
+      - r = g(x) (polinômio de cegamento, para Pedersen-VSS)
+    """
     assert 1 <= k <= n
     assert secret < p
 
-    coeffs = [secret] + [random.randrange(0, p) for _ in range(k - 1)]
-    shares = []
+    # coeficientes do polinômio f(x) com a0 = secret
+    coeffs_f = [secret] + [secrets.randbelow(p - 1) for _ in range(k - 1)]
 
+    # coeficientes do polinômio g(x) (cegamento) — mesmo grau
+    coeffs_g = [secrets.randbelow(p - 1) for _ in range(k)]
+
+    shares = []
     for i in range(1, n + 1):
         x = i
-        y = eval_poly(coeffs, x, p)
-        shares.append((x, y))
+        y = eval_poly(coeffs_f, x, p)
+        r = eval_poly(coeffs_g, x, p)
+        shares.append((x, y, r))
 
+    # opcional: devolve também os coeficientes (útil para debug/tests)
     return shares
 
 
 def lagrange_interpolation(x: int, xs: List[int], ys: List[int], p: int) -> int:
-    """Interpolação de Lagrange."""
+    """Interpolação de Lagrange para avaliar o polinômio em 'x'."""
     total = 0
     k = len(xs)
 
@@ -80,18 +90,20 @@ def generate_shares():
 
     secret_int = int.from_bytes(raw, "big")
 
-    # 2 - Gerar shares 3 de 5
+    # 2 - Gerar shares 5 de threshold 3 (retorna x,y,r)
     shares = make_shares(secret_int, n=5, k=3)
 
     # 3 - Salvar na pasta shares/
     os.makedirs("shares", exist_ok=True)
 
-    for idx, (x, y) in enumerate(shares, start=1):
+    for idx, (x, y, r) in enumerate(shares, start=1):
         filename = f"shares/share_{idx:02d}.txt"
+        # formato: x,y,r
         with open(filename, "w") as f:
-            f.write(f"{x},{y}\n")
+            f.write(f"{x},{y},{r}\n")
 
-    print("✔ Shares gerados e salvos na pasta 'shares/'")
+    print("✔ Shares (x,y,r) gerados e salvos na pasta 'shares/'")
+
 
 # =========================================================
 #                      RECUPERAR SEGREDO
@@ -108,16 +120,25 @@ def recover_secret(indices: List[int]):
 
         with open(filename, "r") as f:
             line = f.read().strip()
-            x, y = map(int, line.split(","))
+            parts = [p.strip() for p in line.split(",") if p.strip() != ""]
+            if len(parts) < 2:
+                print(f"Formato inválido em {filename}")
+                return
+            x = int(parts[0])
+            y = int(parts[1])
             shares_to_use.append((x, y))
 
     secret_int = recover(shares_to_use)
-    secret_bytes = secret_int.to_bytes((secret_int.bit_length() + 7) // 8, "big")
+    # converte de volta para bytes
+    if secret_int == 0:
+        secret_bytes = b""
+    else:
+        secret_bytes = secret_int.to_bytes((secret_int.bit_length() + 7) // 8, "big")
 
     print("\n======= SEGREDO RECONSTRUÍDO =======")
     try:
         print(secret_bytes.decode())
-    except:
+    except Exception:
         print(secret_bytes)
     print("====================================\n")
 

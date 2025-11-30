@@ -1,134 +1,195 @@
-# Projeto: Shamir Secret Sharing + Pedersen Commitments
 
-Este projeto implementa de forma didática e funcional:
+# 🔐 Shamir Secret Sharing + Pedersen Commitments (3-de-5)
 
-- **Compartilhamento de Segredos de Shamir** (threshold 3-de-5) em Python puro  
-- **Commitments de Pedersen** para cada share  
-- **Verificação criptográfica** da integridade de cada share individual
+Projeto didático completo que combina:
+
+- **Shamir's Secret Sharing** (threshold 3 de 5) em Python puro  
+- **Pedersen Commitments** para cada share  
+- **Verificação individual** da integridade de cada share  
+- **Verificação global** da honestidade do dealer
+
+Perfeito para estudos de criptografia threshold, MPC, carteiras multisig ou provas de conceito.
+
+---
 
 ## Estrutura do Projeto
 
 ```
 .
-├── mensagem.txt          ← Segredo original (texto plano)
-├── shamir.py             ← Implementação do Shamir Secret Sharing
-├── pedersen_commit.py    ← Implementação dos Pedersen Commitments
-├── shares/               ← Shares gerados
-└── commitments/          ← Commitments de cada share
+├── mensagem.txt              ← Seu segredo em texto plano
+├── shamir.py                 ← Shamir Secret Sharing
+├── pedersen_commit.py        ← Pedersen Commitments
+├── verificar_dealer.py       ← Verificação global da honestidade do dealer
+├── shares/                   ← 5 shares geradas (x, y, r)
+├── commitments/              ← Commitments + parâmetros públicos
+└── H.json                    ← Parâmetros públicos do Pedersen (gerado automaticamente)
 ```
 
 ---
 
-### 1) Gerar o segredo e os 5 shares (Shamir 3-de-5)
+### 1) 🔐 Gerar as 5 Shares (Threshold 3-de-5)
 
-Coloque o segredo desejado no arquivo `mensagem.txt`.
+Coloque seu segredo no arquivo:
+
+```txt
+mensagem.txt
+```
+
+Em seguida execute:
 
 ```bash
 python3 shamir.py gerar
 ```
 
-Isso cria 5 shares (qualquer 3 deles recuperam o segredo):
+**Resultado:**
 
 ```
 shares/
-├── share_01.txt
+├── share_01.txt   → formato: x,y,r
 ├── share_02.txt
 ├── share_03.txt
 ├── share_04.txt
 └── share_05.txt
 ```
 
-Cada arquivo contém: `x,y` (ponto da curva polinomial).
+Cada share contém três valores separados por vírgula:
+
+```
+x, y, r
+```
+
+- `x` → índice da share (1 a 5)  
+- `y` → valor do polinômio f(x) nesse ponto (o "segredo parcial")  
+- `r` → blinding factor aleatório (usado no Pedersen Commitment)
+
+> Qualquer 3 dessas 5 shares recuperam o segredo original.
 
 ---
 
-### 2) Recuperar o segredo usando 3 shares
+### 2) 🔓 Recuperar o Segredo
 
-Exemplo com os shares 1, 2 e 4:
+Use qualquer combinação de 3 shares (exemplo: 1, 3 e 5):
 
 ```bash
-python3 shamir.py recover 1 2 4
+python3 shamir.py recover 1 3 5
 ```
 
-Saída esperada:
+Saída:
 
 ```
 ======= SEGREDO RECONSTRUÍDO =======
-<conteúdo original de mensagem.txt>
+Seu segredo original aqui!
 ====================================
 ```
 
-Você pode usar qualquer combinação de 3 shares diferentes.
+Funciona com qualquer trio válido!
 
 ---
 
-### 3) Gerar um Pedersen Commitment para uma share
-
-Exemplo: gerar commitment para a share 2
+### 3) 📌 Gerar Todos os Pedersen Commitments de Uma Vez
 
 ```bash
-python3 pedersen_commit.py gerar 2
+python3 pedersen_commit.py gerar_todos
 ```
 
-Isso cria o arquivo:
+**Arquivos criados:**
 
 ```
-commitments/commitment_02.txt
+commitments/
+├── commitment_01.txt
+├── commitment_02.txt
+├── commitment_03.txt
+├── commitment_04.txt
+├── commitment_05.txt
+└── H.json                 ← Parâmetros públicos (g, h, p) fixos
 ```
 
-Conteúdo do commitment:
+Cada `commitment_XX.txt` é um JSON contendo:
 
+```json
+{
+  "share": 3,
+  "x": 3,
+  "y": 94738392010293847,
+  "r": 55667788991011234,
+  "commitment": "0xAbCdE...fG2",
+  "H_used": { "g": "...", "h": "...", "p": "..." }
+}
 ```
-x: 2
-y: 7384938392...         ← valor do share (segredo parcial)
-C: (h1, h2)              ← commitment = g^y * h^r mod p
-r: 1094832049...         ← valor aleatório (blinder)
-H: (h1, h2)              ← parâmetros públicos do commitment
-```
+
+O commitment é calculado como:
+
+**C = g^y · h^r mod p** → perfeitamente oculto e vinculante
 
 ---
 
-### 4) Verificar a integridade de uma share via commitment
+### 4) 🛡 Verificar a Integridade de Uma Share Específica
 
 ```bash
-python3 pedersen_commit.py verificar 2
+python3 pedersen_commit.py verificar 4
 ```
 
-Se tudo estiver correto:
+**Saídas possíveis:**
 
 ```
-[OK] Commitment válido para share 02
+[OK] Share 04 íntegra – commitment válido ✓
 ```
 
-Se o share ou o commitment tiver sido alterado:
+ou, se a share ou commitment foi alterado:
 
 ```
-[ERRO] Commitment inválido!
+[ERRO] Commitment inválido para share 04!
 ```
 
 ---
 
-### Estrutura final esperada após gerar tudo
+### 5) 🧮 Verificar a Honestidade do Dealer (Verificação Global)
 
-```
-.
-├── mensagem.txt
-├── shamir.py
-├── pedersen_commit.py
-├── shares/
-│   ├── share_01.txt
-│   ├── share_02.txt
-│   ├── share_03.txt
-│   ├── share_04.txt
-│   └── share_05.txt
-└── commitments/
-    ├── commitment_01.txt
-    ├── commitment_02.txt
-    ├── commitment_03.txt
-    ├── commitment_04.txt
-    └── commitment_05.txt
+Depois de gerar todos os commitments, rode:
+
+```bash
+python3 verificar_dealer.py
 ```
 
-Pronto! Agora você tem um sistema completo de **threshold cryptography** com **verificação criptográfica individual** de cada share usando Pedersen Commitments.
+**Exemplo de saída com dealer honesto:**
 
-Ideal para estudos, provas de conceito ou integração em projetos de MPC, carteiras multisig, etc.
+```
+[OK] Share 01 íntegra
+[OK] Share 02 íntegra
+[OK] Share 03 íntegra
+[OK] Share 04 íntegra
+[OK] Share 05 íntegra
+
+✓ Todas as shares são individualmente válidas.
+ℹ Usando threshold k=3 para reconstrução.
+
+✓ Todas as 5 shares estão sobre o mesmo polinômio de grau < 3
+✔ Dealer foi HONESTO – consistência global confirmada!
+```
+
+**Se o dealer foi malicioso ou alguma share foi corrompida:**
+
+```
+[ERRO] Share 03 NÃO está sobre o polinômio reconstruído!
+→ Dealer malicioso OU share corrompida/tamperada
+```
+
+---
+
+## Pronto!
+
+Você agora tem um sistema completo de **threshold cryptography verificável** com:
+
+- Segredo dividido em 5 shares (3 necessárias)
+- Commitments criptográficos em cada share
+- Verificação individual e global
+- Detecção automática de dealer malicioso
+
+Ideal para:
+
+- Estudos acadêmicos
+- Provas de conceito de MPC
+- Implementações de carteiras multisig verificáveis
+- Experimentos com Verifiable Secret Sharing (VSS)
+
+Divirta-se e compartilhe conhecimento! 🚀
